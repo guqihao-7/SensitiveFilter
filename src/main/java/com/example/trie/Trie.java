@@ -17,8 +17,7 @@ public class Trie {
         String keyword;
         try {
             while ((keyword = reader.readLine()) != null) {
-                if (keyword.contains("兼") || keyword.contains("职") || keyword.contains("女") || keyword.contains("教") || keyword.contains("师"))
-                    insert(keyword);
+                insert(keyword);
             }
         } catch (IOException e) {
             System.out.println("构建失败!" + e);
