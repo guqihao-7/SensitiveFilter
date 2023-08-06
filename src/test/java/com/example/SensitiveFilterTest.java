@@ -3,7 +3,10 @@ package com.example;
 import cn.hutool.dfa.FoundWord;
 import cn.hutool.dfa.SensitiveProcessor;
 import cn.hutool.dfa.SensitiveUtil;
+import com.example.trie.Trie;
+import com.example.trie.TrieNode;
 import org.junit.Test;
+import org.openjdk.jol.info.ClassLayout;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -89,7 +92,8 @@ public class SensitiveFilterTest {
             sb.append(line);
         String text1 = sb.toString();
         String text2 = sb.toString();
-        System.out.println(text1.length() + " " + text1);
+        //System.out.println(text1.length() + " " + text1);
+        System.out.println(text1.length());
         long start = System.currentTimeMillis();
         String s1 = SensitiveUtil.sensitiveFilter(text1, false, new SensitiveProcessor() {
             @Override
@@ -98,13 +102,15 @@ public class SensitiveFilterTest {
             }
         });
         System.out.println("hutool-dfa 过滤耗时: " + (System.currentTimeMillis() - start) + " ms");
-        System.out.println("hutool-dfa 过滤后所得字符串为: " + s1.length() + " " + s1);
+        //System.out.println("hutool-dfa 过滤后所得字符串为: " + s1.length() + " " + s1);
+        System.out.println("hutool-dfa 过滤后所得字符串为: " + s1.length());
         start = System.currentTimeMillis();
         String s2 = SensitiveFilter.filter(text2, false);
         System.out.println("前缀树过滤耗时: " + (System.currentTimeMillis() - start) + " ms");
-        System.out.println("前缀树过滤后所得字符串为: " + s2.length() + " " + s2);
-        int len = longestCommonSubsequence(s1, s2);
-        System.out.println("最长公共子序列的长度为: " + len + " , 与 hutool 的百分比为: " + (double) len / s1.length());
+        //System.out.println("前缀树过滤后所得字符串为: " + s2.length() + " " + s2);
+        System.out.println("前缀树过滤后所得字符串为: " + s2.length());
+        //int len = longestCommonSubsequence(s1, s2);
+        //System.out.println("最长公共子序列的长度为: " + len + " , 与 hutool 的百分比为: " + (double) len / s1.length());
     }
 
     @Test
@@ -125,14 +131,14 @@ public class SensitiveFilterTest {
             list.add(keyword);
         }
         SensitiveUtil.init(list, false);
-        inputStream = SensitiveFilterTest.class.getClassLoader().getResourceAsStream("\\test_case\\BigBreastsandWideHips-ch13-18.txt");
+        inputStream = SensitiveFilterTest.class.getClassLoader().getResourceAsStream("\\test_case\\BigBreastsandWideHips-ch13-23.txt");
         reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)));
         String line;
         StringBuilder sb = new StringBuilder();
         while ((line = reader.readLine()) != null)
-            sb.append(line.replaceAll(" ", ""));
-        String text1 = sb.toString();
-        String text2 = sb.toString();
+            sb.append(line);
+        String text1 = sb.toString().replaceAll(" ", "").replaceAll("\n", "").replaceAll("\r", "");
+        String text2 = sb.toString().replaceAll(" ", "").replaceAll("\n", "").replaceAll("\r", "");
         System.out.println(text1.length() + " " + text1);
         long start = System.currentTimeMillis();
         String s1 = SensitiveUtil.sensitiveFilter(text1, true, new SensitiveProcessor() {
@@ -175,5 +181,17 @@ public class SensitiveFilterTest {
                 pre = tmp;
             }
         return f[m];
+    }
+
+    // 查看 TrieNode 内存布局
+    @Test
+    public void test6() {
+        TrieNode trieNode = new TrieNode();
+        System.out.println(
+                ClassLayout.parseInstance(trieNode).toPrintable()
+        );
+        System.out.println(
+                ClassLayout.parseInstance(new Trie()).toPrintable()
+        );
     }
 }

@@ -8,7 +8,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
+/*
+    com.example.trie.Trie object internals:
+    OFF  SZ                                       TYPE DESCRIPTION               VALUE
+      0   8                                            (object header: mark)     0x0000000000000009 (non-biasable; age: 1)
+      8   4                                            (object header: class)    0x0108d270
+     12   4                  com.example.trie.TrieNode Trie.root                 (object)
+     16   4   java.util.concurrent.locks.ReentrantLock Trie.writeLock            (object)
+     20   4                                            (object alignment gap)
+    Instance size: 24 bytes
+    Space losses: 0 bytes internal + 4 bytes external = 4 bytes total
+ */
 public class Trie {
     public Trie() {
         long start = System.currentTimeMillis();
@@ -27,7 +39,8 @@ public class Trie {
         System.out.println("前缀树构建耗时: " + (System.currentTimeMillis() - start) + " ms");
     }
 
-    volatile TrieNode root = new TrieNode('/'); // 存储无意义字符
+    private volatile TrieNode root = new TrieNode('/'); // 存储无意义字符
+    private final transient ReentrantLock writeLock = new ReentrantLock();
 
     // 往 Trie 树中插入一个字符串
     public void insert(String s) {
@@ -61,13 +74,30 @@ public class Trie {
      * @param words 待新增或待删除的敏感词条
      * @param save  true 为新增，false 为删除
      */
-    public void refresh(String[] words, boolean save) {
+    public final void refresh(String[] words, boolean save) {
         // 1. cow
         TrieNode p = root, oldRoot = p;
-        // 后序遍历做拷贝
-        TrieNode newNode = copy(root);
 
-        if (save) {
+        if (!save) {
+            // delete
+            for (String word : words) {
+                // 此时 newNode 完全是 root 的副本, root 没有, newNode 自然不可能有
+                boolean find = search(word);
+                if (!find) continue;
+
+                // do delete
+                for (char c : word.toCharArray())
+                    p = p.children.get(c);
+                p.isEndingChar = false; // 写操作原子
+            }
+            return;
+        }
+
+        // 后序遍历做拷贝, 写写互斥
+        writeLock.lock();
+        try {
+            TrieNode newNode = copy(root);  // 在这里重入
+
             for (String s : words) {
                 char[] text = s.toCharArray();
                 p = newNode;
@@ -78,41 +108,36 @@ public class Trie {
                 }
                 p.isEndingChar = true;
             }
-        } else {
-            // delete
-            for (String word : words) {
-                // 此时 newNode 完全是 root 的副本, root 没有, newNode 自然不可能有
-                boolean find = search(word);
-                if (!find) continue;
 
-                // do delete
-                p = newNode;
-                for (char c : word.toCharArray())
-                    p = p.children.get(c);
-                p.isEndingChar = false;
-            }
+            root = newNode;
+        } finally {
+            writeLock.unlock();
         }
-
-        root = newNode;
     }
 
     // cow
-    private TrieNode copy(TrieNode root) {
-        if (root == null) return null;
-        TrieNode trieNode = new TrieNode();
-        trieNode.setEndingChar(root.isEndingChar);
-        trieNode.setData(root.data);
-        Map<Character, TrieNode> children = root.children;
-        // base case
-        if (isLeaf(root)) {
-            trieNode.setChildren(new HashMap<>(0));
+    private final TrieNode copy(TrieNode root) {
+        TrieNode snapshot;
+        if ((snapshot = root) == null) return null;
+        writeLock.lock();
+        try {
+            TrieNode trieNode = new TrieNode();
+            trieNode.setEndingChar(snapshot.isEndingChar);
+            trieNode.setData(snapshot.data);
+            Map<Character, TrieNode> children = snapshot.children;
+            // base case
+            if (isLeaf(snapshot)) {
+                trieNode.setChildren(new HashMap<>(0));
+                return trieNode;
+            }
+            Map<Character, TrieNode> newMap = new HashMap<>(children.size() * 4 / 3 + 1);
+            for (Character key : children.keySet())
+                newMap.put(key, copy(children.get(key)));
+            trieNode.setChildren(newMap);
             return trieNode;
+        } finally {
+            writeLock.unlock();
         }
-        Map<Character, TrieNode> newMap = new HashMap<>(children.size());
-        for (Character key : children.keySet())
-            newMap.put(key, copy(children.get(key)));
-        trieNode.setChildren(newMap);
-        return trieNode;
     }
 
     private boolean isLeaf(TrieNode node) {
@@ -140,13 +165,14 @@ public class Trie {
         int i = 0, j = 0;
         StringBuilder sb = new StringBuilder();
         Deque<Frame> stack = new ArrayDeque<>();
-        TrieNode p = root;
+        // 读全部基于快照读, 避免在过滤的过程中先读到旧的, 然后写后读到新的
+        TrieNode p = root, snapshot = p;
         while (i < text.length()) {
             if (j >= text.length()) j = text.length() - 1;
             char c = text.charAt(j);
             // 跳过符号
             if (isSymbol(c)) {
-                if (p == root) {
+                if (p == snapshot) {
                     sb.append(c);
                     i++;
                 }
@@ -169,14 +195,14 @@ public class Trie {
                 if (top == null || !top.node.isEndingChar) {
                     // 说明该条路径上没有能匹配的
                     sb.append(text.charAt(i));
-                    p = root;
+                    p = snapshot;
                     j = ++i;
                 } else {
                     for (int k = i; k <= top.j; k++)
                         sb.append("*");
                     j = top.j;
                     i = ++j;
-                    p = root;
+                    p = snapshot;
                 }
             } else {
                 // 匹配上
@@ -193,13 +219,13 @@ public class Trie {
             return text;
         int i = 0, j = 0;
         StringBuilder sb = new StringBuilder();
-        TrieNode p = root;
+        TrieNode p = root, snapshot = p;
         while (j < text.length()) {
             char c = text.charAt(j);
 
             // 跳过符号
             if (isSymbol(c)) {
-                if (p == root) {
+                if (p == snapshot) {
                     sb.append(c);
                     i++;
                 }
@@ -213,7 +239,7 @@ public class Trie {
                 // 只能判断以 i 开头到 j 的字符串不是敏感词
                 // 不是的话只能确定 i 一定不是, 但是 i + 1 ~ j 不一定不是
                 sb.append(text.charAt(i));
-                p = root;
+                p = snapshot;
                 // 来到 i 的下一位继续比
                 j = ++i;
             } else if (p.isEndingChar) {
@@ -222,7 +248,7 @@ public class Trie {
                 for (int k = i; k <= j; k++)    // 这里是按照长度做替换
                     sb.append("*");
                 i = ++j;
-                p = root;
+                p = snapshot;
             } else {
                 // 正常情况匹配上了, 但还不是叶子, 需要继续匹配
                 j++;
@@ -232,7 +258,7 @@ public class Trie {
             if (j == text.length() && i != j) {
                 sb.append(text.charAt(i));
                 j = ++i;
-                p = root;
+                p = snapshot;
             }
         }
         return sb.toString();
