@@ -1,7 +1,7 @@
 package com.example.trie;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /*
     内存布局:
@@ -33,8 +33,8 @@ public class TrieNode {
     // 默认为 false
     volatile boolean isEndingChar;  // 根据 Intel 手册和内存布局可知, 读写就是原子操作
     volatile Character data;
-    // 因为包含汉字, 所以不用数组
-    volatile Map<Character, TrieNode> children = new HashMap<>();
+    // 因为包含汉字, 所以不用数组, 之所以用 ConcurrentHashMap 的原因不是出于并发效率高的原因, 仅仅是因为 HashMap 无法解决扩容时读的问题
+    volatile Map<Character, TrieNode> children = new ConcurrentHashMap<>();
 
     public TrieNode(char data) {
         this.data = data;
