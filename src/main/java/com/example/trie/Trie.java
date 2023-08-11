@@ -1,17 +1,12 @@
 package com.example.trie;
 
 import cn.hutool.core.util.CharUtil;
-import com.example.SensitiveFilter;
-import sun.misc.Unsafe;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /*
@@ -36,16 +31,7 @@ public class Trie {
             while ((keyword = reader.readLine()) != null) {
                 insert(keyword);
             }
-            Field unsafeField;
-            unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
-            unsafeField.setAccessible(true);
-            unsafe = (Unsafe) unsafeField.get(null);
-            Field tableField = HashMap.class.getDeclaredField("table");
-            long tableOffset = unsafe.objectFieldOffset(tableField);
-            tableField.setAccessible(true);
-            table = (Object[]) tableField.get(root.children);
-            tableBaseOffset = unsafe.arrayBaseOffset(table.getClass());
-        } catch (IOException | NoSuchFieldException | IllegalAccessException e) {
+        } catch (IOException e) {
             System.out.println("构建失败!" + e);
             root = null;
             return;
@@ -55,16 +41,13 @@ public class Trie {
                 inputStreamReader.close();
                 inputStream.close();
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                System.out.println("I/O关闭失败: " + e);
             }
         }
         System.out.println("前缀树构建耗时: " + (System.currentTimeMillis() - start) + " ms");
     }
 
     private volatile TrieNode root = new TrieNode('/'); // 存储无意义字符
-    private Object[] table;
-    Unsafe unsafe;
-    long tableBaseOffset;
     private final transient ReentrantLock writeLock = new ReentrantLock();
 
     // 往 Trie 树中插入一个字符串
@@ -118,10 +101,58 @@ public class Trie {
             return;
         }
 
+        //doAdd(p, words);
+        addToTrie(root, words);
+    }
+
+    // 分段锁来做, 不需要再更新引用做拷贝, 直接在原树上分段锁加
+    private final void addToTrie(TrieNode root, String[] words) {
+        for (String word : words) {
+            if (word == null || word.length() == 0) continue;
+            Character firstChar = word.charAt(0);
+            retry:
+            for (; ; ) {
+                if (root.children.get(firstChar) == null) {
+                    TrieNode node = new TrieNode(word.charAt(0));
+                    writeLock.lock();   // 锁 null, 这里仍然会存在写竞争
+                    try {
+                        root.children.put(firstChar, node);
+                    } finally {
+                        writeLock.unlock();
+                    }
+                    // 不管成功没成功, 都 retry
+                    continue retry;
+                } else {
+                    // 正常分段锁
+                    int n = word.length(), idx = 1;
+                    TrieNode p = root, tmp = p.children.get(firstChar);
+                    while (tmp != null) {
+                        TrieNode t = tmp;
+                        tmp = tmp.children.get(idx++);
+                        p = t;
+                    }
+
+                    synchronized (p) {
+                        while (idx < n) {
+                            char c = word.charAt(idx++);
+                            p.children.put(c, new TrieNode(c));
+                            p = p.children.get(c);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+
+    // 并发不如分段锁
+    @Deprecated
+    private final void doAdd(TrieNode p, String[] words) {
         // 后序遍历做拷贝, 写写互斥
         writeLock.lock();
         try {
-            TrieNode newNode = copy(root);  // 在这里重入
+            TrieNode newNode = COWAndUpdateRoot(p);  // 在这里重入, 复制要复制最新的, 所以和写也要互斥, 否则可能会丢失更新
 
             for (String s : words) {
                 char[] text = s.toCharArray();
@@ -134,77 +165,30 @@ public class Trie {
                 p.isEndingChar = true;
             }
 
-            root = newNode;
+            p = newNode;
         } finally {
             writeLock.unlock();
         }
-    }
-
-    // 分段锁来做, 不需要再更新引用做拷贝, 直接在原树上分段锁加
-    private final void addToTrie(TrieNode root, String[] words) {
-        for (String word : words) {
-            Character firstChar = word.charAt(0);
-            retry:
-            for (; ; ) {
-                if (root.children.get(firstChar) == null) {
-                    TrieNode node = new TrieNode(word.charAt(0));
-                    Object hashMapNode = createOneHashMapNode(firstChar, node);
-                    unsafe.compareAndSwapObject(table, tableBaseOffset + ((table.length - 1) & hash(firstChar)),
-                            null, hashMapNode);
-                    // 不管成功没成功, 都 retry
-                    continue retry;
-                } else {
-                    // 正常分段锁
-                    synchronized (root.children.get(firstChar)) {
-
-                    }
-                }
-            }
-        }
-    }
-
-    Object createOneHashMapNode(Character k, TrieNode v) {
-        Class<?> clz = getHashMapNodeClass();
-        Object o = null;
-        try {
-            o = clz.newInstance();
-            Field hashField = clz.getDeclaredField("hash");
-            Field kField = clz.getDeclaredField("key");
-            Field vField = clz.getDeclaredField("value");
-            hashField.set(o, hash(k));
-            kField.set(o, k);
-            vField.set(o, v);
-        } catch (InstantiationException
-                 | IllegalAccessException
-                 | NoSuchFieldException e) {
-            return null;
-        }
-        return o;
     }
 
     // cow
-    private final TrieNode copy(TrieNode root) {
+    private final TrieNode COWAndUpdateRoot(TrieNode root) {
         TrieNode snapshot;
         if ((snapshot = root) == null) return null;
-        writeLock.lock();   // 复制要复制最新的, 所以和写也要互斥, 否则可能会丢失更新
-        try {
-            TrieNode trieNode = new TrieNode();
-            trieNode.setEndingChar(snapshot.isEndingChar);
-            trieNode.setData(snapshot.data);
-            Map<Character, TrieNode> children = snapshot.children;
-            // base case
-            if (isLeaf(snapshot)) {
-                trieNode.setChildren(new HashMap<>(0));
-                return trieNode;
-            }
-            Map<Character, TrieNode> newMap = new HashMap<>(children.size() * 4 / 3 + 1);
-            for (Character key : children.keySet())
-                newMap.put(key, copy(children.get(key)));
-            trieNode.setChildren(newMap);
+        TrieNode trieNode = new TrieNode();
+        trieNode.setEndingChar(snapshot.isEndingChar);
+        trieNode.setData(snapshot.data);
+        Map<Character, TrieNode> children = snapshot.children;
+        // base case
+        if (isLeaf(snapshot)) {
+            trieNode.setChildren(new HashMap<>(0));
             return trieNode;
-        } finally {
-            writeLock.unlock();
         }
+        Map<Character, TrieNode> newMap = new HashMap<>(children.size() * 4 / 3 + 1);
+        for (Character key : children.keySet())
+            newMap.put(key, COWAndUpdateRoot(children.get(key)));
+        trieNode.setChildren(newMap);
+        return trieNode;
     }
 
     private boolean isLeaf(TrieNode node) {
@@ -361,16 +345,5 @@ public class Trie {
             if (p.isEndingChar) num++;
         }
         return num;
-    }
-
-    private Class<?> getHashMapNodeClass() {
-        if (table == null || table.length == 0)
-            return null;
-        return table[0].getClass();
-    }
-
-    static final int hash(Object key) {
-        int h;
-        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
     }
 }

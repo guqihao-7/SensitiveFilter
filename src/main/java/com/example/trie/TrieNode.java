@@ -32,9 +32,9 @@ always be carried out atomically:
 public class TrieNode {
     // 默认为 false
     volatile boolean isEndingChar;  // 根据 Intel 手册和内存布局可知, 读写就是原子操作
-    Character data;
+    volatile Character data;
     // 因为包含汉字, 所以不用数组
-    Map<Character, TrieNode> children = new HashMap<>();
+    volatile Map<Character, TrieNode> children = new HashMap<>();
 
     public TrieNode(char data) {
         this.data = data;
