@@ -7,14 +7,19 @@ import com.example.trie.Trie;
 import com.example.trie.TrieNode;
 import org.junit.Test;
 import org.openjdk.jol.info.ClassLayout;
+import oshi.SystemInfo;
+import oshi.hardware.HardwareAbstractionLayer;
+import oshi.software.os.OSProcess;
+import oshi.software.os.OSThread;
+import oshi.software.os.OperatingSystem;
+import oshi.software.os.windows.WindowsOSThread;
+import oshi.util.FormatUtil;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SensitiveFilterTest {
 
@@ -193,5 +198,56 @@ public class SensitiveFilterTest {
         System.out.println(
                 ClassLayout.parseInstance(new Trie()).toPrintable()
         );
+    }
+
+    @Test
+    public void test7() {
+        InputStream inputStream = SensitiveFilterTest.class.getClassLoader().getResourceAsStream("\\sensitive-words.txt");
+        LineNumberReader lineNumberReader = new LineNumberReader(new InputStreamReader(Objects.requireNonNull(inputStream)));
+        Runnable task = () -> {
+            String keyword;
+            List<String> list = new ArrayList<>();
+            try {
+                while ((keyword = lineNumberReader.readLine()) != null) {
+                    list.add(keyword);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                System.out.println(list.size());
+            }
+        };
+        List<Thread> list = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            list.add(new Thread(task));
+        }
+        long start = System.currentTimeMillis();
+        for (Thread thread : list) {
+            thread.start();
+        }
+        for (Thread thread : list) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        long end = System.currentTimeMillis();
+        System.out.println(end - start);
+    }
+
+    @Test
+    public void test8() {
+        SystemInfo si = new SystemInfo();
+        HardwareAbstractionLayer hal = si.getHardware();
+        OperatingSystem os = si.getOperatingSystem();
+
+        OSProcess myProc = os.getProcess(os.getProcessId());
+        System.out.println(myProc.getProcessID());
+    }
+
+    @Test
+    public void test9() {
+        SensitiveFilter.filter("");
     }
 }

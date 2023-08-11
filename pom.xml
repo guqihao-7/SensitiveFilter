@@ -31,6 +31,12 @@
             <version>0.16</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.github.oshi</groupId>
+            <artifactId>oshi-core</artifactId>
+            <version>6.4.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>

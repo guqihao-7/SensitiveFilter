@@ -2,12 +2,16 @@ package com.example.trie;
 
 import cn.hutool.core.util.CharUtil;
 import com.example.SensitiveFilter;
+import sun.misc.Unsafe;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Field;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /*
@@ -25,21 +29,42 @@ public class Trie {
     public Trie() {
         long start = System.currentTimeMillis();
         InputStream inputStream = Trie.class.getClassLoader().getResourceAsStream("\\sensitive-words.txt");
-        BufferedReader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)));
+        InputStreamReader inputStreamReader = new InputStreamReader(Objects.requireNonNull(inputStream));
+        BufferedReader reader = new BufferedReader(inputStreamReader);
         String keyword;
         try {
             while ((keyword = reader.readLine()) != null) {
                 insert(keyword);
             }
-        } catch (IOException e) {
+            Field unsafeField;
+            unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            unsafe = (Unsafe) unsafeField.get(null);
+            Field tableField = HashMap.class.getDeclaredField("table");
+            long tableOffset = unsafe.objectFieldOffset(tableField);
+            tableField.setAccessible(true);
+            table = (Object[]) tableField.get(root.children);
+            tableBaseOffset = unsafe.arrayBaseOffset(table.getClass());
+        } catch (IOException | NoSuchFieldException | IllegalAccessException e) {
             System.out.println("构建失败!" + e);
             root = null;
             return;
+        } finally {
+            try {
+                reader.close();
+                inputStreamReader.close();
+                inputStream.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
         System.out.println("前缀树构建耗时: " + (System.currentTimeMillis() - start) + " ms");
     }
 
     private volatile TrieNode root = new TrieNode('/'); // 存储无意义字符
+    private Object[] table;
+    Unsafe unsafe;
+    long tableBaseOffset;
     private final transient ReentrantLock writeLock = new ReentrantLock();
 
     // 往 Trie 树中插入一个字符串
@@ -115,11 +140,53 @@ public class Trie {
         }
     }
 
+    // 分段锁来做, 不需要再更新引用做拷贝, 直接在原树上分段锁加
+    private final void addToTrie(TrieNode root, String[] words) {
+        for (String word : words) {
+            Character firstChar = word.charAt(0);
+            retry:
+            for (; ; ) {
+                if (root.children.get(firstChar) == null) {
+                    TrieNode node = new TrieNode(word.charAt(0));
+                    Object hashMapNode = createOneHashMapNode(firstChar, node);
+                    unsafe.compareAndSwapObject(table, tableBaseOffset + ((table.length - 1) & hash(firstChar)),
+                            null, hashMapNode);
+                    // 不管成功没成功, 都 retry
+                    continue retry;
+                } else {
+                    // 正常分段锁
+                    synchronized (root.children.get(firstChar)) {
+
+                    }
+                }
+            }
+        }
+    }
+
+    Object createOneHashMapNode(Character k, TrieNode v) {
+        Class<?> clz = getHashMapNodeClass();
+        Object o = null;
+        try {
+            o = clz.newInstance();
+            Field hashField = clz.getDeclaredField("hash");
+            Field kField = clz.getDeclaredField("key");
+            Field vField = clz.getDeclaredField("value");
+            hashField.set(o, hash(k));
+            kField.set(o, k);
+            vField.set(o, v);
+        } catch (InstantiationException
+                 | IllegalAccessException
+                 | NoSuchFieldException e) {
+            return null;
+        }
+        return o;
+    }
+
     // cow
     private final TrieNode copy(TrieNode root) {
         TrieNode snapshot;
         if ((snapshot = root) == null) return null;
-        writeLock.lock();
+        writeLock.lock();   // 复制要复制最新的, 所以和写也要互斥, 否则可能会丢失更新
         try {
             TrieNode trieNode = new TrieNode();
             trieNode.setEndingChar(snapshot.isEndingChar);
@@ -294,5 +361,16 @@ public class Trie {
             if (p.isEndingChar) num++;
         }
         return num;
+    }
+
+    private Class<?> getHashMapNodeClass() {
+        if (table == null || table.length == 0)
+            return null;
+        return table[0].getClass();
+    }
+
+    static final int hash(Object key) {
+        int h;
+        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
     }
 }
