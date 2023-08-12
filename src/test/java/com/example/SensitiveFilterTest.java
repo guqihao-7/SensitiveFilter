@@ -144,7 +144,7 @@ public class SensitiveFilterTest {
             sb.append(line);
         String text1 = sb.toString().replaceAll(" ", "").replaceAll("\n", "").replaceAll("\r", "");
         String text2 = sb.toString().replaceAll(" ", "").replaceAll("\n", "").replaceAll("\r", "");
-        System.out.println(text1.length() + " " + text1);
+        //System.out.println(text1.length() + " " + text1);
         long start = System.currentTimeMillis();
         String s1 = SensitiveUtil.sensitiveFilter(text1, true, new SensitiveProcessor() {
             @Override
@@ -153,11 +153,11 @@ public class SensitiveFilterTest {
             }
         });
         System.out.println("hutool-dfa 过滤耗时: " + (System.currentTimeMillis() - start) + " ms");
-        System.out.println("hutool-dfa 过滤后所得字符串为: " + s1.length() + " " + s1);
+        //System.out.println("hutool-dfa 过滤后所得字符串为: " + s1.length() + " " + s1);
         start = System.currentTimeMillis();
         String s2 = SensitiveFilter.filter(text2, true);
         System.out.println("前缀树过滤耗时: " + (System.currentTimeMillis() - start) + " ms");
-        System.out.println("前缀树过滤后所得字符串为: " + s2.length() + " " + s2);
+        //System.out.println("前缀树过滤后所得字符串为: " + s2.length() + " " + s2);
         int len = longestCommonSubsequence(s1, s2);
         System.out.println("最长公共子序列的长度为: " + len + " , 与 hutool 的百分比为: " + (double) len / s1.length());
     }

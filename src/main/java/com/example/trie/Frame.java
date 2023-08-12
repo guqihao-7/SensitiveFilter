@@ -1,8 +1,23 @@
 package com.example.trie;
 
+import java.util.Objects;
+
 public class Frame {
     TrieNode node;
     int j;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Frame frame = (Frame) o;
+        return j == frame.j && Objects.equals(node, frame.node);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(node, j);
+    }
 
     public Frame(TrieNode node, int j) {
         this.node = node;

@@ -1,6 +1,7 @@
 package com.example.trie;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /*
@@ -35,6 +36,19 @@ public class TrieNode {
     volatile Character data;
     // 因为包含汉字, 所以不用数组, 之所以用 ConcurrentHashMap 的原因不是出于并发效率高的原因, 仅仅是因为 HashMap 无法解决扩容时读的问题
     volatile Map<Character, TrieNode> children = new ConcurrentHashMap<>();
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TrieNode trieNode = (TrieNode) o;
+        return Objects.equals(data, trieNode.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(data);
+    }
 
     public TrieNode(char data) {
         this.data = data;
