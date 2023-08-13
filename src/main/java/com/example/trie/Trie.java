@@ -116,7 +116,7 @@ public class Trie {
                     TrieNode node = new TrieNode(word.charAt(0));
                     writeLock.lock();   // 锁 null, 这里仍然会存在写竞争
                     try {
-                        if (root.children.get(firstChar) == null)   // double check
+                        if (root.children.get(firstChar) != null)   // double check
                             continue retry;
                         root.children.put(firstChar, node);
                     } finally {
