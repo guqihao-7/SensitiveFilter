@@ -7,6 +7,10 @@
 
 核心代码三百行左右，集中在 `Trie` 类中。后期有考虑 升级为 AC自动机，但该数据结构稍有复杂，我不确定我是否能 hold 住，因此暂时先搁置。
 
+## Benchmark
+测试代码在 `BenchmarkTest` 下，测试结果如下：
+![benchmark](./png/benchmark.png)
+
 ## 过滤程度
 本模块以 hutool-dfa 做测试验证，仓库中附带敏感词过滤词库和测试用例。经测试，不论是贪婪匹配，
 还是密集匹配，针对`text.txt`测试用例，本仓库采用的前缀树算法过滤后所得字符串 `text1`，与 hutool-dfa 过滤后的字符串 `text2`
