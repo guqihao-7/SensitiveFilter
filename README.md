@@ -8,8 +8,29 @@
 核心代码三百行左右，集中在 `Trie` 类中。后期有考虑 升级为 AC自动机，但该数据结构稍有复杂，我不确定我是否能 hold 住，因此暂时先搁置。
 
 ## Benchmark
-测试代码在 `BenchmarkTest` 下，测试结果如下：
+测试代码在 `BenchmarkTest` 下，测试文本长度在二百七十万左右，测试结果如下：
 ![benchmark](./png/benchmark.png)
+
+本仓库的每次过滤操作，经 JMH 压测后，平均耗时在 80 ms，hutool-dfa 平均耗时在 162 ms，因此本仓库的过滤速度比 hutool-dfa 快 2 倍左右。
+本仓库过滤的吞吐量每毫秒为 0.012，hutool-dfa 为 0.007 左右，因此本仓库的吞吐量比 hutool-dfa 高 70% 左右。
+因为 JMH 本身不支持压测 memory 占用情况，因此这里使用了 ibaca 作者提供的代码，我看了下核心逻辑应该是获取到每次 iteration 前后的内存占用，然后求差值计算数据
+norm 为每次 op 所占用的 memory，rate 则是每秒申请的内存
+```
+        Benchmark                                 Mode  Cnt          Score     Error   Units
+        BenchmarkTest.hutool_dfa                 thrpt    5          0.007 ±   0.001  ops/ms
+        BenchmarkTest.hutool_dfa:mem.alloc.norm  thrpt    5  184702446.225 ±   0.189    B/op
+        BenchmarkTest.hutool_dfa:mem.alloc.rate  thrpt    5       1152.062 ±  22.928  MB/sec
+        BenchmarkTest.trie                       thrpt    5          0.012 ±   0.001  ops/ms
+        BenchmarkTest.trie:mem.alloc.norm        thrpt    5   95258243.496 ±   0.198    B/op
+        BenchmarkTest.trie:mem.alloc.rate        thrpt    5       1063.172 ±  56.851  MB/sec
+        BenchmarkTest.hutool_dfa                  avgt    5        162.028 ±  27.653   ms/op
+        BenchmarkTest.hutool_dfa:mem.alloc.norm   avgt    5  184702422.955 ±   1.103    B/op
+        BenchmarkTest.hutool_dfa:mem.alloc.rate   avgt    5       1036.547 ± 177.032  MB/sec
+        BenchmarkTest.trie                        avgt    5         80.421 ±   2.441   ms/op
+        BenchmarkTest.trie:mem.alloc.norm         avgt    5   95258243.507 ±   0.459    B/op
+        BenchmarkTest.trie:mem.alloc.rate         avgt    5       1075.604 ±  33.856  MB/sec
+```
+
 
 ## 过滤程度
 本模块以 hutool-dfa 做测试验证，仓库中附带敏感词过滤词库和测试用例。经测试，不论是贪婪匹配，
