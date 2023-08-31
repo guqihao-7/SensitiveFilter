@@ -250,4 +250,34 @@ public class SensitiveFilterTest {
     public void test9() {
         SensitiveFilter.filter("");
     }
+
+    @Test
+    public void test10() throws IOException {
+        /*
+            丰乳肥臀13-23: 422807
+            text: 76047
+            text2: 2690513
+         */
+        InputStream inputStream = SensitiveFilterTest.class.getClassLoader().getResourceAsStream("\\test_case\\BigBreastsandWideHips-ch13-23.txt");
+        BufferedReader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)));
+        String line;
+        StringBuilder sb = new StringBuilder();
+        while ((line = reader.readLine()) != null)
+            sb.append(line);
+        System.out.println("丰乳肥臀13-23: " + sb.length());
+        sb.delete(0, sb.length());
+
+        inputStream = SensitiveFilterTest.class.getClassLoader().getResourceAsStream("\\test_case\\text.txt");
+        reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)));
+        while ((line = reader.readLine()) != null)
+            sb.append(line);
+        System.out.println("text: " + sb.length());
+        sb.delete(0, sb.length());
+
+        inputStream = SensitiveFilterTest.class.getClassLoader().getResourceAsStream("\\test_case\\text2.txt");
+        reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)));
+        while ((line = reader.readLine()) != null)
+            sb.append(line);
+        System.out.println("text2: " + sb.length());
+    }
 }

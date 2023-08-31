@@ -31,6 +31,9 @@ norm 为每次 op 所占用的 memory，rate 则是每秒申请的内存
         BenchmarkTest.trie:mem.alloc.rate         avgt    5       1075.604 ±  33.856  MB/sec
 ```
 
+下图是 benchmark 对比了不同长度的字符串的过滤效率：
+![benchmark](./png/JMH Visual Chart.png)
+
 
 ## 过滤程度
 本模块以 hutool-dfa 做测试验证，仓库中附带敏感词过滤词库和测试用例。经测试，不论是贪婪匹配，
