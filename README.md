@@ -32,7 +32,7 @@ norm 为每次 op 所占用的 memory，rate 则是每秒申请的内存
 ```
 
 下图是 benchmark 对比了不同长度的字符串的过滤效率：
-![benchmark](./png/JMH Visual Chart.png)
+![benchmark](./png/benchmark2.png)
 
 
 ## 过滤程度
