@@ -52,9 +52,9 @@ public class Trie {
 
     // 往 Trie 树中插入一个字符串
     public void insert(String s) {
-        char[] text = s.toCharArray();
         TrieNode p = root;
-        for (char c : text) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
             if (p.children.get(c) == null)
                 p.children.put(c, new TrieNode(c));
             p = p.children.get(c);
@@ -64,9 +64,9 @@ public class Trie {
 
     // 在 Trie 树中查找有没有s这个字符串
     private boolean search(String s) {
-        char[] pattern = s.toCharArray();
         TrieNode p = root;
-        for (char c : pattern) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
             if (p.children.get(c) == null)
                 return false;
             p = p.children.get(c);
@@ -157,9 +157,9 @@ public class Trie {
             TrieNode newNode = COWAndUpdateRoot(p);  // 在这里重入, 复制要复制最新的, 所以和写也要互斥, 否则可能会丢失更新
 
             for (String s : words) {
-                char[] text = s.toCharArray();
                 p = newNode;
-                for (char c : text) {
+                for (int i = 0; i < s.length(); i++) {
+                    char c = s.charAt(i);
                     if (p.children.get(c) == null)
                         p.children.put(c, new TrieNode(c));
                     p = p.children.get(c);
@@ -327,8 +327,8 @@ public class Trie {
     // 查询一个单词是否是别的单词的前缀
     private boolean prefix(String s) {
         TrieNode p = root;
-        char[] pattern = s.toCharArray();
-        for (char c : pattern) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
             if (p.children.get(c) == null)
                 return false;
             p = p.children.get(c);
@@ -340,9 +340,8 @@ public class Trie {
     private int numOfPrefix(String s) {
         int num = 0;
         TrieNode p = root;
-        char[] pattern = s.toCharArray();
-        for (char c : pattern) {
-            p = root.children.get(c);
+        for (int i = 0; i < s.length(); i++) {
+            p = root.children.get(s.charAt(i));
             if (p == null) break;
             if (p.isEndingChar) num++;
         }
